@@ -229,12 +229,12 @@ class Optimiz(tk.Tk):
             # Display results
             self.result_text.delete(1.0, tk.END)
             if status == pywraplp.Solver.OPTIMAL:
-                self.result_text.insert(tk.END, f"Solution found!\n")
+                self.result_text.insert(tk.END, f"Solution found!\n\n")
                 self.result_text.insert(tk.END, f"Objective value = {solver.Objective().Value()}\n")
                 for i, var in enumerate(variables):
                     self.result_text.insert(tk.END, f"x{i+1} = {var.solution_value()}\n")
 
-                self.result_text.insert(tk.END, f"\n ----------------- \n")
+                self.result_text.insert(tk.END, f"\n ----------------- \n\n")
 
                 def compute_slack_or_surplus(constraint):
                     constraint_solution_value = 0
@@ -242,19 +242,22 @@ class Optimiz(tk.Tk):
                         constraint_solution_value += v.solution_value() * constraint.GetCoefficient(v)
                     if constraint.ub() != solver.infinity():
                         # the upper bound is set so it will give slack if any
-                        return constraint.ub() - constraint_solution_value
+                        slack = constraint.ub() - constraint_solution_value
+                        return constraint_solution_value, slack
                     else:
-                        return constraint_solution_value - constraint.lb()
+                        surplus = constraint_solution_value - constraint.lb()
+                        return constraint_solution_value, surplus
 
                 for constraint_name, constraint in zip(constraints_info_dict, constraints):
                     const_str = ""
-                    const_str += constraint_name + ": " + f"{constraints_info_dict[constraint_name]['expr']}"
+                    # const_str += constraint_name + ": " + f"{constraints_info_dict[constraint_name]['expr']}"
+                    const_str += constraint_name + ": "
                     if "slack" in constraints_info_dict[constraint_name]:
-                        slack = compute_slack_or_surplus(constraint)
-                        const_str += f" slack = {slack}"
+                        solution_value, slack = compute_slack_or_surplus(constraint)
+                        const_str += f" solution={solution_value}  slack={slack}"
                     elif "surplus" in constraints_info_dict[constraint_name]:
-                        surplus = compute_slack_or_surplus(constraint)
-                        const_str += f" surplus = {surplus}"
+                        solution_value, surplus = compute_slack_or_surplus(constraint)
+                        const_str += f" solution={solution_value}  surplus={surplus}"
                     else:
                         const_str += f" slack/surplus = 0"
                     self.result_text.insert(tk.END, const_str + "\n")
