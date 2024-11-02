@@ -1,6 +1,7 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
 from ortools.linear_solver import pywraplp
+from utils import convert_to_float
 
 
 class Optimiz(tk.Tk):
@@ -8,7 +9,7 @@ class Optimiz(tk.Tk):
         super().__init__()
 
         self.title("optimiz")
-        self.geometry("600x500")
+        self.geometry("1200x1000")
 
         # Problem Type section
         problem_frame = ttk.LabelFrame(self, text="Problem Type")
@@ -57,7 +58,7 @@ class Optimiz(tk.Tk):
         ttk.Button(self, text="Solve", command=self.solve).pack(pady=10)
 
         # Results section
-        self.result_text = tk.Text(self, height=5, width=50)
+        self.result_text = tk.Text(self, height=25, width=75)
         self.result_text.pack(pady=10, padx=10)
 
 
@@ -139,10 +140,13 @@ class Optimiz(tk.Tk):
         for i in range(n):
             constraint_frame = ttk.Frame(self.constraints_frame)
             constraint_frame.pack(fill="x", pady=2)
+            entry = ttk.Entry(constraint_frame, width=10, name=f"constraint_{i+1}_name")
+            entry.insert(0, f"constraint_{i+1}_name")
+            entry.pack(side="left", padx=2)
 
             for j in range(var_count):
                 ttk.Label(constraint_frame, text=f"x{j+1}:").pack(side="left")
-                entry = ttk.Entry(constraint_frame, width=5)
+                entry = ttk.Entry(constraint_frame, width=5, name=f"constraint_{i+1}_{j+1}_coeff")
                 entry.pack(side="left", padx=2)
 
             relation = ttk.Combobox(constraint_frame, values=["<=", ">=", "="], width=3)
@@ -152,7 +156,10 @@ class Optimiz(tk.Tk):
             rhs = ttk.Entry(constraint_frame, width=5)
             rhs.pack(side="left", padx=2)
 
+    # TODO:
+    #   Have different functions for solving problems. The following is for simple, then for Shortest route etc
     def solve(self):
+        constraints_info_dict = dict() # name: {expression: '3x+4y<=6', solution_value: 1337, slack/surplus: 0}
         try:
             # Create solver
             solver = pywraplp.Solver.CreateSolver('GLOP')
@@ -172,7 +179,7 @@ class Optimiz(tk.Tk):
             obj_coeffs = []
             for i in range(0, len(self.obj_coeffs_frame.winfo_children()), 2):
                 entry = self.obj_coeffs_frame.winfo_children()[i+1]
-                obj_coeffs.append(float(entry.get()))
+                obj_coeffs.append(convert_to_float(entry.get()))
 
             objective = solver.Objective()
             for i, coeff in enumerate(obj_coeffs):
@@ -184,26 +191,37 @@ class Optimiz(tk.Tk):
                 objective.SetMinimization()
 
             # Add constraints
+            constraints = []
             for constraint_frame in self.constraints_frame.winfo_children():
                 widgets = constraint_frame.winfo_children()
+                constraint_name = widgets[0].get()
+                constraints_info_dict[constraint_name] = dict()
                 coeffs = []
-                for i in range(0, var_count * 2, 2):
+                coeffs_str = []
+                for i in range(1, var_count * 2, 2):
                     entry = widgets[i+1]
-                    coeffs.append(float(entry.get()))
+                    coeffs_str.append(entry.get())
+                    coeffs.append(convert_to_float(entry.get()))
 
                 relation = widgets[-2].get()
-                rhs = float(widgets[-1].get())
+                rhs_str = widgets[-1].get()
+                rhs = convert_to_float(widgets[-1].get())
+
+                constraints_info_dict[constraint_name]["expr"] = " + ".join(coeffs_str) + f" {relation} {rhs_str}"
 
                 constraint = solver.Constraint(-solver.infinity(), solver.infinity())
                 for i, coeff in enumerate(coeffs):
                     constraint.SetCoefficient(variables[i], coeff)
 
                 if relation == "<=":
-                    constraint.SetUB(rhs)
+                    constraint.SetUb(rhs)
+                    constraints_info_dict[constraint_name]["slack"] = "tofill"
                 elif relation == ">=":
-                    constraint.SetLB(rhs)
+                    constraint.SetLb(rhs)
+                    constraints_info_dict[constraint_name]["surplus"] = "tofill"
                 else:  # "="
-                    constraint.SetBounds(rhs, rhs)
+                        constraint.SetBounds(rhs, rhs)
+                constraints.append(constraint)
 
             # Solve
             status = solver.Solve()
@@ -215,6 +233,31 @@ class Optimiz(tk.Tk):
                 self.result_text.insert(tk.END, f"Objective value = {solver.Objective().Value()}\n")
                 for i, var in enumerate(variables):
                     self.result_text.insert(tk.END, f"x{i+1} = {var.solution_value()}\n")
+
+                self.result_text.insert(tk.END, f"\n ----------------- \n")
+
+                def compute_slack_or_surplus(constraint):
+                    constraint_solution_value = 0
+                    for v in variables:
+                        constraint_solution_value += v.solution_value() * constraint.GetCoefficient(v)
+                    if constraint.ub() != solver.infinity():
+                        # the upper bound is set so it will give slack if any
+                        return constraint.ub() - constraint_solution_value
+                    else:
+                        return constraint_solution_value - constraint.lb()
+
+                for constraint_name, constraint in zip(constraints_info_dict, constraints):
+                    const_str = ""
+                    const_str += constraint_name + ": " + f"{constraints_info_dict[constraint_name]['expr']}"
+                    if "slack" in constraints_info_dict[constraint_name]:
+                        slack = compute_slack_or_surplus(constraint)
+                        const_str += f" slack = {slack}"
+                    elif "surplus" in constraints_info_dict[constraint_name]:
+                        surplus = compute_slack_or_surplus(constraint)
+                        const_str += f" surplus = {surplus}"
+                    else:
+                        const_str += f" slack/surplus = 0"
+                    self.result_text.insert(tk.END, const_str + "\n")
             else:
                 self.result_text.insert(tk.END, "The problem does not have an optimal solution.")
 
