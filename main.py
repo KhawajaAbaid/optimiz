@@ -305,6 +305,8 @@ class TransportationFrame(ttk.LabelFrame):
             self.cost_matrix.append(src_i_costs)
 
     def display_results(self, solution_matrix):
+        for widget in self.results_frame.winfo_children():
+            widget.destroy()
         cost_matrix_float = []
         for i in range(self.n_sources.get()):
             row = []
