@@ -217,6 +217,7 @@ class TransportationFrame(ttk.LabelFrame):
         # Variables to store node counts
         self.n_sources = tk.IntVar(value=2)
         self.n_destinations = tk.IntVar(value=2)
+        self.objective_type = tk.StringVar(value="minimize")
 
         # Create main frames
         self.setup_network_definition()
@@ -274,9 +275,16 @@ class TransportationFrame(ttk.LabelFrame):
 
     def setup_controls(self):
         """Create frame for action buttons"""
+        # Let's add objective before buttons
+        objective_frame = ttk.Frame(self)
+        objective_frame.pack(fill="x", padx=10, pady=5)
+        ttk.Radiobutton(objective_frame, text="Maximize", variable=self.objective_type,
+                        value="maximize").pack(side="left")
+        ttk.Radiobutton(objective_frame, text="Minimize", variable=self.objective_type,
+                        value="minimize").pack(side="left")
+
         button_frame = ttk.Frame(self)
         button_frame.pack(fill="x", padx=10, pady=5)
-
         ttk.Button(button_frame, text="Update Tables", command=self.update_tables).pack(side="left", padx=5)
         ttk.Button(button_frame, text="Solve", command=self.solve).pack(side="left", padx=5)
         ttk.Button(button_frame, text="Clear", command=self.clear).pack(side="left", padx=5)
@@ -407,7 +415,10 @@ class TransportationFrame(ttk.LabelFrame):
                 coeff = convert_to_float(self.cost_matrix[i][j].get())
                 objective.SetCoefficient(var_matrix[i][j], coeff)
 
-        objective.SetMinimization() # Do we need min?
+        if self.objective_type.get() == "minimize":
+            objective.SetMinimization() # Do we need max?, well turns out we do
+        else:
+            objective.SetMaximization()
 
         # Set constraints
         constraints = []
@@ -480,6 +491,7 @@ class TransportationFrame(ttk.LabelFrame):
         for widget in self.costs_frame.winfo_children():
             widget.destroy()
         self.update_tables()
+
 
 class Optimiz(tk.Tk):
     def __init__(self):
